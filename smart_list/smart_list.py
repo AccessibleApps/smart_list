@@ -5,6 +5,7 @@ configurable columns. Automatically handles platform differences (ListView
 on Windows/Linux, DataView on macOS) and includes Windows performance
 optimizations for virtual lists.
 """
+
 from __future__ import absolute_import
 
 import logging
@@ -48,6 +49,7 @@ def freeze_and_thaw(func):
     Prevents flickering and improves performance when modifying
     multiple items.
     """
+
     @functools.wraps(func)
     def closure(self, *args, **kwargs):
         self.control.Freeze()
@@ -98,6 +100,7 @@ class SmartList(object):
         lst.set_columns([Column("Name", "name"), Column("Age", "age")])
         lst.add_items([Person("Alice", 30), Person("Bob", 25)])
     """
+
     def __init__(self, parent=None, id=-1, *args, **kwargs):
         choices = kwargs.pop("choices", [])
         self.control = UnifiedList(
@@ -277,6 +280,9 @@ class SmartList(object):
     def CanAcceptFocus(self):
         return self.control.CanAcceptFocus()
 
+    def SetToolTipString(self, *args, **kwargs):
+        return self.control.SetToolTipString(*args, **kwargs)
+
 
 class VirtualSmartList(SmartList):
     """Virtual list for efficiently displaying large datasets.
@@ -307,6 +313,7 @@ class VirtualSmartList(SmartList):
         lst.set_columns([Column("ID", "id")])
         lst.update_count(1000000)
     """
+
     allowed_navigation_keys = [
         getattr(wx, "WXK_%s" % key.upper())
         for key in "up down left right home end pageup pagedown space return f4".split()
@@ -397,6 +404,7 @@ class Column(object):
         width: Column width in pixels (-1 for auto)
         model_field: Field name or callable for extracting values
     """
+
     def __init__(self, title=None, width=-1, model_field=None):
         self.title = title
         self.model_field = model_field

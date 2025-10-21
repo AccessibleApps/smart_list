@@ -106,6 +106,9 @@ class UnifiedList(object):
         else:
             self.control.Select(index, select)
 
+    def SetToolTipString(self, *args, **kwargs):
+        return self.control.SetToolTipString(*args, **kwargs)
+
     def Destroy(self):
         return self.control.Destroy()
 
@@ -192,6 +195,7 @@ if dataview is not None:
 
         Delegates value retrieval to parent SmartList's OnGetItemText.
         """
+
         def __init__(self, parent_obj):
             self.count = 0
             super(VirtualDataViewModel, self).__init__(self.count)
@@ -225,6 +229,7 @@ if dataview is not None:
 
 class VirtualCtrl(wx.ListCtrl):
     """ListView subclass that delegates virtual item requests to parent."""
+
     def __init__(self, parent_obj=None, *args, **kwargs):
         super(VirtualCtrl, self).__init__(*args, **kwargs)
         self.parent = parent_obj
