@@ -271,8 +271,14 @@ class SmartList(object):
     def SetMinSize(self, size):
         self.control.control.SetMinSize(size)
 
+    def Show(self):
+        return self.control.control.Show()
+
     def Hide(self):
         return self.control.control.Hide()
+
+    def SetSizerProp(self, *args, **kwargs):
+        return self.control.control.SetSizerProp(*args, **kwargs)
 
     def SetLabel(self, label):
         self.control.SetLabel(label)
