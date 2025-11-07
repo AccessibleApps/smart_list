@@ -111,6 +111,173 @@ Column(title="Age", model_field=lambda p: datetime.now().year - p.birth_year)
 
 Resolution order: callable → attribute → dict key
 
+## Column Sorting
+
+SmartList supports column-based sorting with visual indicators. Users can click column headers to sort, or you can sort programmatically.
+
+### Basic Sorting
+
+By default, all columns are sortable:
+
+```python
+from smart_list import SmartList, Column
+
+# All columns are sortable by default
+list.set_columns([
+    Column(title="Name", model_field="name"),
+    Column(title="Age", model_field="age")
+])
+
+# Users can click headers to sort
+# First click: ascending
+# Second click: descending
+# Click different column: sort by that column
+```
+
+### Non-Sortable Columns
+
+Disable sorting for specific columns:
+
+```python
+Column(
+    title="Actions",
+    model_field=get_actions,
+    sortable=False  # Clicking header does nothing
+)
+```
+
+### Custom Sort Keys
+
+Use `sort_key` for custom sort logic:
+
+```python
+# Case-insensitive string sorting
+Column(
+    title="Name",
+    model_field="name",
+    sort_key=lambda x: x["name"].lower()
+)
+
+# Sort by computed value
+Column(
+    title="Authors",
+    model_field=format_authors,  # Display: "Smith, Jones"
+    sort_key=lambda x: len(x["authors"])  # Sort: by count
+)
+
+# Sort by nested field
+Column(
+    title="Location",
+    model_field="address.city",
+    sort_key=lambda x: x.address.city if x.address else ""
+)
+```
+
+### Default Sort Direction
+
+Set default sort direction for a column:
+
+```python
+# Numeric columns often default to descending
+Column(
+    title="Downloads",
+    model_field="downloads",
+    reverse_sort=True  # First click sorts descending
+)
+```
+
+### Programmatic Sorting
+
+```python
+# Sort by column index
+list.sort_by_column(column_index=0, reverse=False)
+
+# Toggle sort (same as clicking header)
+list.toggle_sort(column_index=1)
+
+# Check sort state
+column_idx, is_reversed = list.get_sort_state()
+if column_idx is not None:
+    print(f"Sorted by column {column_idx}")
+
+# Clear sorting
+list.clear_sort()
+```
+
+### Sort Persistence
+
+Sort order is maintained when adding items:
+
+```python
+list.sort_by_column(0)  # Sort by first column
+list.add_items([new_item1, new_item2])  # Items inserted in sorted position
+```
+
+### Visual Indicators
+
+- **ListView** (Windows/Linux): Shows ▲ (ascending) or ▼ (descending) in header
+- **DataView** (macOS): Uses native sort indicator
+
+### Sorting Limitations
+
+- **Virtual lists** do not support sorting (client-side sorting not feasible for large datasets)
+- Mixed-type columns may fail to sort (e.g., mixing strings and numbers)
+- Sort keys should handle None values gracefully
+
+### Complete Example
+
+```python
+import wx
+from smart_list import SmartList, Column
+
+class Book:
+    def __init__(self, title, author, year):
+        self.title = title
+        self.author = author
+        self.year = year
+
+books = [
+    Book("1984", "George Orwell", 1949),
+    Book("Brave New World", "Aldous Huxley", 1932),
+    Book("Animal Farm", "George Orwell", 1945),
+]
+
+class MyFrame(wx.Frame):
+    def __init__(self):
+        super().__init__(None, size=(600, 400))
+        panel = wx.Panel(self)
+
+        self.list = SmartList(parent=panel, style=wx.LC_REPORT)
+        self.list.set_columns([
+            # Case-insensitive title sorting
+            Column(
+                title="Title",
+                model_field="title",
+                width=200,
+                sort_key=lambda b: b.title.lower()
+            ),
+            # Author sorting (default)
+            Column(
+                title="Author",
+                model_field="author",
+                width=150
+            ),
+            # Year sorting, default descending (newest first)
+            Column(
+                title="Year",
+                model_field="year",
+                width=100,
+                reverse_sort=True
+            ),
+        ])
+        self.list.add_items(books)
+        self.Show()
+
+app = wx.App()
+MyFrame()
+app.MainLoop()
+```
+
 ## API Reference
 
 ### SmartList
@@ -130,6 +297,10 @@ Resolution order: callable → attribute → dict key
 | `select_model(item)` | Select item by value |
 | `find_index_of_item(model)` | Get list index for model |
 | `clear()` | Remove all items |
+| `sort_by_column(column_index, reverse)` | Sort by column index |
+| `toggle_sort(column_index)` | Toggle sort or sort by new column |
+| `get_sort_state()` | Get (column_index, reverse) tuple |
+| `clear_sort()` | Clear sort state and indicators |
 
 ### VirtualSmartList
 
@@ -148,7 +319,14 @@ Inherits SmartList methods plus:
 ### Column
 
 ```python
-Column(title="Header", model_field="field", width=100)
+Column(
+    title="Header",
+    model_field="field",
+    width=100,
+    sortable=True,
+    sort_key=None,
+    reverse_sort=False
+)
 ```
 
 | Parameter | Description |
@@ -156,6 +334,9 @@ Column(title="Header", model_field="field", width=100)
 | `title` | Column header text |
 | `model_field` | Field name (str) or callable for extracting values |
 | `width` | Column width in pixels (-1 for auto) |
+| `sortable` | Whether column can be sorted (default: True) |
+| `sort_key` | Custom callable for extracting sort value (optional) |
+| `reverse_sort` | Default sort direction, True=descending (default: False) |
 
 ## Performance Considerations
 

@@ -187,6 +187,117 @@ class UnifiedList(object):
     def RefreshItems(self, from_item, to_item):
         self.control.RefreshItems(from_item, to_item)
 
+    def BindColumnClick(self, handler):
+        """Bind column header click event.
+
+        Args:
+            handler: Callback function(event)
+        """
+        if self.use_dataview:
+            # DataView uses EVT_DATAVIEW_COLUMN_HEADER_CLICK
+            self.control.Bind(dataview.EVT_DATAVIEW_COLUMN_HEADER_CLICK, handler)
+        else:
+            # ListView uses EVT_LIST_COL_CLICK
+            self.control.Bind(wx.EVT_LIST_COL_CLICK, handler)
+
+    def GetColumn(self, index):
+        """Get column information.
+
+        Args:
+            index: Column index
+
+        Returns:
+            Column information object
+        """
+        if self.use_dataview:
+            return self.control.GetColumn(index)
+        else:
+            return self.control.GetColumn(index)
+
+    def GetColumnCount(self):
+        """Get number of columns.
+
+        Returns:
+            Number of columns
+        """
+        if self.use_dataview:
+            return self.control.GetColumnCount()
+        else:
+            return self.control.GetColumnCount()
+
+    def SetColumn(self, index, col_info):
+        """Set column information.
+
+        Args:
+            index: Column index
+            col_info: Column information object
+        """
+        if self.use_dataview:
+            # DataView columns cannot be modified the same way
+            pass
+        else:
+            self.control.SetColumn(index, col_info)
+
+    def SetSortIndicator(self, column_index, reverse=False):
+        """Show sort indicator on column header.
+
+        Args:
+            column_index (int): Column to show indicator on
+            reverse (bool): True for descending (▼), False for ascending (▲)
+        """
+        if self.use_dataview:
+            # DataView supports sort indicators
+            col = self.control.GetColumn(column_index)
+            if col:
+                if reverse:
+                    col.SetSortOrder(False)  # Descending
+                else:
+                    col.SetSortOrder(True)   # Ascending
+        else:
+            # ListView: Use title-based indicator
+            self._update_column_title_with_indicator(column_index, reverse)
+
+    def ClearSortIndicator(self):
+        """Clear all sort indicators from column headers."""
+        if self.use_dataview:
+            # Clear DataView sort indicator
+            # DataView doesn't have a simple clear method, so we'll skip for now
+            pass
+        else:
+            # Clear ListView title indicators
+            self._clear_all_column_indicators()
+
+    def _update_column_title_with_indicator(self, column_index, reverse):
+        """Add ▲/▼ to column title (ListView workaround).
+
+        Args:
+            column_index (int): Column to update
+            reverse (bool): Direction indicator
+        """
+        # First clear all existing indicators
+        self._clear_all_column_indicators()
+
+        # Get column info
+        col_info = self.control.GetColumn(column_index)
+        title = col_info.GetText()
+
+        # Remove any existing indicators
+        title = title.rstrip(" ▲▼↑↓")
+
+        # Add new indicator
+        indicator = " ▼" if reverse else " ▲"
+        col_info.SetText(title + indicator)
+        self.control.SetColumn(column_index, col_info)
+
+    def _clear_all_column_indicators(self):
+        """Remove ▲/▼ from all column titles (ListView workaround)."""
+        for i in range(self.control.GetColumnCount()):
+            col_info = self.control.GetColumn(i)
+            title = col_info.GetText()
+            title = title.rstrip(" ▲▼↑↓")
+            col_info.SetText(title)
+            self.control.SetColumn(i, col_info)
+
 
 if dataview is not None:
 

@@ -111,6 +111,12 @@ class SmartList(object):
         self.list_items = []
         self.index_map = {}
         self.columns = []
+
+        # Sorting state
+        self.sort_column = None  # Index of column being sorted by
+        self.sort_reverse = False  # Sort direction
+        self.sort_enabled = True  # Master switch for sorting
+
         self.add_items(choices)
 
     def set_columns(self, columns):
@@ -122,6 +128,10 @@ class SmartList(object):
         self.columns = columns
         for column in columns:
             self.control.AppendColumn(column.title, column.width)
+
+        # Bind column click event if any columns are sortable
+        if any(col.sortable for col in columns):
+            self.control.BindColumnClick(self._handle_column_click)
 
     def get_columns_for(self, model):
         cols = []
@@ -136,18 +146,29 @@ class SmartList(object):
     def add_items(self, items):
         """Add multiple items to the list.
 
+        If list is currently sorted, items are added and list is re-sorted.
+
         Args:
             items: Iterable of model objects to display
         """
         if self.index_map is None:
             self._rebuild_index_map()
+
+        # Add items to models list
         for item in items:
-            columns = self.get_columns_for(item)
-            self.control.Append(columns)
             self.models.append(item)
-            if isinstance(item, MutableMapping):
-                item = freeze_dict(item)
-            self.index_map[item] = len(self.models) - 1
+
+        # If sorted, re-sort and rebuild. Otherwise add to display.
+        if self.sort_column is not None:
+            self.sort_by_column(self.sort_column, self.sort_reverse)
+        else:
+            # Add items to display in order
+            for item in items:
+                columns = self.get_columns_for(item)
+                self.control.Append(columns)
+                if isinstance(item, MutableMapping):
+                    item = freeze_dict(item)
+                self.index_map[item] = len(self.models) - 1
 
     def find_index_of_item(self, model):
         """Get list index for a model object.
@@ -268,6 +289,131 @@ class SmartList(object):
             else:
                 self.add_item(model)
 
+    def _handle_column_click(self, event):
+        """Handle column header click for sorting.
+
+        Args:
+            event: wx.ListEvent or wx.dataview.DataViewEvent with column index
+        """
+        if not self.sort_enabled:
+            return
+
+        # Get column index from event
+        if hasattr(event, 'GetColumn'):
+            column_index = event.GetColumn()
+        elif hasattr(event, 'GetDataViewColumn'):
+            # DataView event - need to find column index
+            col = event.GetDataViewColumn()
+            column_index = None
+            for i in range(self.control.GetColumnCount()):
+                if self.control.GetColumn(i) == col:
+                    column_index = i
+                    break
+            if column_index is None:
+                return
+        else:
+            return
+
+        # Check if column is sortable
+        if column_index < 0 or column_index >= len(self.columns):
+            return
+        if not self.columns[column_index].sortable:
+            return
+
+        self.toggle_sort(column_index)
+
+    def toggle_sort(self, column_index):
+        """Toggle sort direction or sort by new column.
+
+        If currently sorted by this column, reverses direction.
+        If sorted by different column, sorts by this column (using column's default direction).
+
+        Args:
+            column_index (int): Index of column to sort by
+        """
+        if column_index == self.sort_column:
+            # Toggle direction on same column
+            self.sort_reverse = not self.sort_reverse
+        else:
+            # Sort by new column using its default direction
+            self.sort_column = column_index
+            self.sort_reverse = self.columns[column_index].reverse_sort
+
+        self.sort_by_column(self.sort_column, self.sort_reverse)
+
+    def sort_by_column(self, column_index, reverse=False):
+        """Sort the list by specified column.
+
+        Args:
+            column_index (int): Index of column to sort by (0-based)
+            reverse (bool): Sort in descending order if True
+
+        Raises:
+            ValueError: If column_index is out of range
+            RuntimeError: If column is not sortable
+        """
+        if column_index < 0 or column_index >= len(self.columns):
+            raise ValueError("Column index %d out of range" % column_index)
+
+        column = self.columns[column_index]
+        if not column.sortable:
+            raise RuntimeError("Column %d (%s) is not sortable" % (column_index, column.title))
+
+        # Store sort state
+        self.sort_column = column_index
+        self.sort_reverse = reverse
+
+        # Sort models using column's get_sort_value
+        try:
+            self.models.sort(
+                key=lambda model: column.get_sort_value(model),
+                reverse=reverse
+            )
+        except Exception as e:
+            logger.exception("Error sorting by column %d: %s" % (column_index, e))
+            raise
+
+        # Rebuild display
+        self._rebuild_display()
+
+        # Update visual sort indicator
+        self.control.SetSortIndicator(column_index, reverse)
+
+    def _rebuild_display(self):
+        """Rebuild the list display from sorted models."""
+        self.control.Freeze()
+        try:
+            # Clear display but keep models
+            self.control.Clear()
+
+            # Re-add all items in new order
+            for model in self.models:
+                columns = self.get_columns_for(model)
+                self.control.Append(columns)
+
+            # Rebuild index map
+            self._rebuild_index_map()
+        finally:
+            self.control.Thaw()
+
+    def get_sort_state(self):
+        """Get current sort state.
+
+        Returns:
+            tuple: (column_index, reverse) or (None, None) if unsorted
+        """
+        return (self.sort_column, self.sort_reverse)
+
+    def clear_sort(self):
+        """Clear sorting and return to original order.
+
+        Note: This doesn't restore insertion order, just clears the sort state.
+        To restore original order, you'd need to track it separately.
+        """
+        self.sort_column = None
+        self.sort_reverse = False
+        self.control.ClearSortIndicator()
+
     def SetMinSize(self, size):
         self.control.control.SetMinSize(size)
 
@@ -340,6 +486,9 @@ class VirtualSmartList(SmartList):
         self.cache = []
         self.control.Bind(wx.EVT_CHAR, self.on_list_key_down)
 
+        # Disable sorting for virtual lists
+        self.sort_enabled = False
+
     def on_list_key_down(self, evt):
         if evt.KeyCode in self.allowed_navigation_keys:
             evt.Skip()
@@ -409,12 +558,57 @@ class Column(object):
         title: Column header text
         width: Column width in pixels (-1 for auto)
         model_field: Field name or callable for extracting values
+        sortable: Whether column can be sorted (default True)
+        sort_key: Custom callable for extracting sort value (optional)
+        reverse_sort: Default to descending sort (default False)
     """
 
-    def __init__(self, title=None, width=-1, model_field=None):
+    def __init__(self, title=None, width=-1, model_field=None,
+                 sortable=True, sort_key=None, reverse_sort=False):
         self.title = title
         self.model_field = model_field
         self.width = width
+        self.sortable = sortable
+        self.sort_key = sort_key
+        self.reverse_sort = reverse_sort
+
+    def get_sort_value(self, model):
+        """Extract sort value from model object.
+
+        Uses sort_key if provided, otherwise uses get_model_value logic.
+
+        Args:
+            model: Object to extract value from
+
+        Returns:
+            Comparable value for sorting
+
+        Raises:
+            RuntimeError: If field not found and sort_key not provided
+        """
+        if self.sort_key is not None:
+            return self.sort_key(model)
+
+        # Fall back to get_model_value logic
+        if self.model_field is None:
+            return ""
+        if is_callable(self.model_field):
+            return self.model_field(model)
+
+        try:
+            value = getattr(model, self.model_field)
+        except (AttributeError, TypeError):
+            try:
+                value = model[self.model_field]
+            except (KeyError, TypeError):
+                raise RuntimeError(
+                    "Unable to find a %r attribute or key on model %r"
+                    % (self.model_field, model)
+                )
+
+        if is_callable(value):
+            value = value()
+        return value
 
     def get_model_value(self, model):
         """Extract display value from model object.
