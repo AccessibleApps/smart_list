@@ -413,6 +413,8 @@ class Column(object):
 
     def __init__(self, title=None, width=-1, model_field=None):
         self.title = title
+        if isinstance(model_field, (staticmethod, classmethod)):
+            model_field = model_field.__func__
         self.model_field = model_field
         self.width = width
 
