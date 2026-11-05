@@ -13,10 +13,12 @@ Model-based list control for wxPython with virtual scrolling support for large d
 ## Installation
 
 ```bash
-uv add smart_list
+uv add git+https://github.com/accessibleapps/smart_list.git
 # or
-pip install smart_list
+pip install git+https://github.com/accessibleapps/smart_list.git
 ```
+
+It isn't on PyPI, so install it from GitHub.
 
 ## Usage
 
